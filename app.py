@@ -69,4 +69,4 @@ LANGUAGE_OPTIONS = {
     "sanskrit": {"label": "🇮🇳 Sanskrit (संस्कृतम्)", "whisper": None, "speech": "sa-IN"},
     "santali": {"label": "🇮🇳 Santali (ᱥᱟᱱᱛᱟᱲᱤ)", "whisper": None, "speech": "sat-IN"},
     "sindhi": {"label": "🇮🇳 Sindhi (सिन्धी)", "whisper": None, "speech": "sd-IN"},
-    "tamil": {"label": "🇮🇳 Tamil (தமிழ்)",
+    "tamil": {"label": "🇮🇳 Tamil (தமிழ்)"},
