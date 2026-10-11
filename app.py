@@ -1,6 +1,7 @@
 import os
 import base64
 import hashlib
+import html
 import inspect
 import json
 import re
@@ -34,7 +35,11 @@ st.set_page_config(
 # --------------------------
 # API / MODEL CONFIG
 # --------------------------
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+try:
+    GROQ_API_KEY = str(st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY", ""))).strip()
+except Exception:
+    # Local development usually uses .env; Streamlit Community Cloud uses Secrets.
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 
 CHAT_MODEL = os.getenv("CHAT_MODEL", "openai/gpt-oss-20b")
 CHAT_FALLBACK_MODEL = os.getenv("CHAT_FALLBACK_MODEL", "llama-3.3-70b-versatile")
@@ -67,6 +72,27 @@ LANGUAGE_OPTIONS = {
     "tamil": {"label": "🇮🇳 Tamil (தமிழ்)", "whisper": "ta", "speech": "ta-IN"},
     "telugu": {"label": "🇮🇳 Telugu (తెలుగు)", "whisper": "te", "speech": "te-IN"},
     "urdu": {"label": "🇮🇳 Urdu (اردو)", "whisper": "ur", "speech": "ur-IN"},
+    "arabic": {"label": "🌍 Arabic (العربية)", "whisper": "ar", "speech": "ar-SA"},
+    "chinese": {"label": "🌍 Chinese (中文)", "whisper": "zh", "speech": "zh-CN"},
+    "dutch": {"label": "🌍 Dutch (Nederlands)", "whisper": "nl", "speech": "nl-NL"},
+    "french": {"label": "🌍 French (Français)", "whisper": "fr", "speech": "fr-FR"},
+    "german": {"label": "🌍 German (Deutsch)", "whisper": "de", "speech": "de-DE"},
+    "greek": {"label": "🌍 Greek (Ελληνικά)", "whisper": "el", "speech": "el-GR"},
+    "hebrew": {"label": "🌍 Hebrew (עברית)", "whisper": "he", "speech": "he-IL"},
+    "indonesian": {"label": "🌍 Indonesian (Bahasa Indonesia)", "whisper": "id", "speech": "id-ID"},
+    "italian": {"label": "🌍 Italian (Italiano)", "whisper": "it", "speech": "it-IT"},
+    "japanese": {"label": "🌍 Japanese (日本語)", "whisper": "ja", "speech": "ja-JP"},
+    "korean": {"label": "🌍 Korean (한국어)", "whisper": "ko", "speech": "ko-KR"},
+    "persian": {"label": "🌍 Persian (فارسی)", "whisper": "fa", "speech": "fa-IR"},
+    "polish": {"label": "🌍 Polish (Polski)", "whisper": "pl", "speech": "pl-PL"},
+    "portuguese": {"label": "🌍 Portuguese (Português)", "whisper": "pt", "speech": "pt-BR"},
+    "russian": {"label": "🌍 Russian (Русский)", "whisper": "ru", "speech": "ru-RU"},
+    "spanish": {"label": "🌍 Spanish (Español)", "whisper": "es", "speech": "es-ES"},
+    "swahili": {"label": "🌍 Swahili (Kiswahili)", "whisper": "sw", "speech": "sw-KE"},
+    "thai": {"label": "🌍 Thai (ไทย)", "whisper": "th", "speech": "th-TH"},
+    "turkish": {"label": "🌍 Turkish (Türkçe)", "whisper": "tr", "speech": "tr-TR"},
+    "ukrainian": {"label": "🌍 Ukrainian (Українська)", "whisper": "uk", "speech": "uk-UA"},
+    "vietnamese": {"label": "🌍 Vietnamese (Tiếng Việt)", "whisper": "vi", "speech": "vi-VN"},
 }
 
 WHISPER_LANGUAGE_MAP = {
@@ -84,6 +110,27 @@ WHISPER_LANGUAGE_MAP = {
     "ta": "tamil", "tamil": "tamil",
     "te": "telugu", "telugu": "telugu",
     "ur": "urdu", "urdu": "urdu",
+    "ar": "arabic", "arabic": "arabic",
+    "zh": "chinese", "zh-cn": "chinese", "chinese": "chinese",
+    "nl": "dutch", "dutch": "dutch",
+    "fr": "french", "french": "french",
+    "de": "german", "german": "german",
+    "el": "greek", "greek": "greek",
+    "he": "hebrew", "hebrew": "hebrew",
+    "id": "indonesian", "indonesian": "indonesian",
+    "it": "italian", "italian": "italian",
+    "ja": "japanese", "japanese": "japanese",
+    "ko": "korean", "korean": "korean",
+    "fa": "persian", "persian": "persian",
+    "pl": "polish", "polish": "polish",
+    "pt": "portuguese", "portuguese": "portuguese",
+    "ru": "russian", "russian": "russian",
+    "es": "spanish", "spanish": "spanish",
+    "sw": "swahili", "swahili": "swahili",
+    "th": "thai", "thai": "thai",
+    "tr": "turkish", "turkish": "turkish",
+    "uk": "ukrainian", "ukrainian": "ukrainian",
+    "vi": "vietnamese", "vietnamese": "vietnamese",
 }
 
 GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -91,6 +138,149 @@ GROQ_STT_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 
 MAX_HISTORY_MESSAGES = 12
 REQUEST_TIMEOUT = 45
+
+# Every user-facing static string lives here so the complete interface can be
+# translated in one cached Groq request without changing the layout or CSS.
+UI_COPY = {
+    "site_language": "Website language",
+    "site_language_help": "Translate app labels and information. AI reply language is chosen separately.",
+    "custom_language": "Enter a language name",
+    "language_name_custom": "Other / custom language",
+    "sidebar_subtitle": "Friendly first-aid guidance for everyday health questions.",
+    "appearance": "Appearance",
+    "dark_mode": "Dark mode",
+    "light_mode": "Light mode",
+    "current_theme": "Current theme",
+    "new_conversation": "New conversation",
+    "demo_mode": "Demo Mode",
+    "demo_mode_help": "Uses prepared replies so you can demonstrate the interface even when the API is unavailable.",
+    "response_language": "AI reply language",
+    "response_language_help": "Choose the language used for Drocto AI's answers. Auto-detect follows the language of your message.",
+    "auto_speak": "Auto-speak voice replies",
+    "auto_speak_help": "When you send a voice message, Drocto AI automatically speaks its reply aloud.",
+    "location": "Location (optional)",
+    "location_placeholder": "e.g. Dhanbad",
+    "location_help": "Used only to add simple weather and air-quality context when relevant.",
+    "side_normal_chat": "Text chat → fast conversational model",
+    "side_photos": "Photos → image observations + chat",
+    "side_voice": "Voice → speech transcription + spoken reply",
+    "side_languages": "Multilingual replies, including Hinglish",
+    "medical_disclaimer": "General information and first-aid guidance — not a medical diagnosis.",
+    "online_badge": "Online · Educational assistant",
+    "hero_intro": "Describe it, show it, or say it — get calm, practical first-aid guidance. Fast chat for text, Groq vision for photos, and voice notes transcribed on the fly, in your language.",
+    "tag_wounds": "Wound care",
+    "tag_burns": "Burns",
+    "tag_bites": "Bites & stings",
+    "tag_fever": "Fever",
+    "tag_choking": "Choking",
+    "tag_languages": "Hindi · Hinglish · 22+ languages",
+    "how_it_works": "How it works",
+    "how_info": "Describe what happened → get possible explanations and practical next steps. Drocto AI doesn't diagnose.",
+    "try_asking": "Try asking",
+    "feature_ask_title": "Ask a question",
+    "feature_ask_text": "\"What should I do for a minor cut?\" — answered with calm, practical steps.",
+    "feature_photo_title": "Attach a photo",
+    "feature_photo_text": "Show a rash, wound or swelling — Groq vision describes visible observations.",
+    "feature_voice_title": "Voice chat",
+    "feature_voice_text": "Speak naturally and Drocto AI talks back in the same language.",
+    "chip_cut_label": "Minor cut care",
+    "chip_cut_question": "How do I clean and dress a small cut at home?",
+    "chip_burn_label": "Small burn",
+    "chip_burn_question": "What should I do for a minor kitchen burn?",
+    "chip_bite_label": "Insect bite",
+    "chip_bite_question": "My arm is swollen after a bee sting. What should I do?",
+    "chip_choking_label": "Choking",
+    "chip_choking_question": "What are the basic steps to help someone who is choking?",
+    "demo_banner": "Demo Mode is on — prepared replies are used and no live AI request is required.",
+    "photo_attached": "Photo attached",
+    "prepared_reply": "Prepared demonstration response",
+    "chat_placeholder": "Tell me what happened…",
+    "voice_message": "Voice message",
+    "transcribing_voice": "Transcribing your voice…",
+    "voice_understood": "Voice understood",
+    "transcription_failed": "Voice transcription failed",
+    "taking_closer_look": "Taking a closer look…",
+    "putting_into_plain_language": "Preparing a clear response…",
+    "thinking": "Thinking…",
+    "image_error": "I couldn't analyze that photo right now. You can still ask me about what you're noticing in words, or try the photo again in a moment.",
+    "chat_error": "I'm having trouble reaching the chat service right now. Try again in a moment, or switch on Demo Mode if you need the presentation to keep running.",
+    "technical_detail": "Technical detail",
+    "default_image_prompt": "Take a look at this photo and help me understand what I should do next.",
+    "default_help_prompt": "Can you help me with this?",
+    "footer_disclaimer": "General first-aid information — not a diagnosis",
+    "read_aloud": "Read aloud",
+    "speaking": "Speaking…",
+    "voice_not_supported": "Voice playback not supported",
+}
+
+# Keep language names in the same translation bundle as the rest of the UI.
+for _lang_key, _lang_data in LANGUAGE_OPTIONS.items():
+    _label_parts = _lang_data["label"].split(" ", 1)
+    UI_COPY[f"language_name_{_lang_key}"] = _label_parts[1] if len(_label_parts) > 1 else _label_parts[0]
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def translate_ui_copy(language, api_key):
+    """Translate the UI as one JSON bundle; cache by language and key presence."""
+    if language == "english":
+        return {**UI_COPY, "_translation_ok": True}
+    if not api_key:
+        return {**UI_COPY, "_translation_ok": False}
+
+    prompt = (
+        "Translate the VALUES of this JSON object into the language named " + language + ". "
+        "Return only a valid JSON object with exactly the same keys and string values translated. "
+        "Keep product name Drocto AI, medical meaning, emojis, arrows, and placeholders unchanged. "
+        "Use fluent, natural, locally appropriate wording and the normal script for the target language. "
+        "Do not add advice, explanations, markdown fences, or extra keys. Input JSON:\n"
+        + json.dumps(UI_COPY, ensure_ascii=False)
+    )
+    errors = []
+    models = [CHAT_MODEL]
+    if CHAT_FALLBACK_MODEL and CHAT_FALLBACK_MODEL not in models:
+        models.append(CHAT_FALLBACK_MODEL)
+    for model in models:
+        try:
+            response = requests.post(
+                GROQ_CHAT_URL,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": "You are a professional software-interface translator. Preserve JSON keys exactly."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0,
+                    "max_tokens": 5000,
+                },
+                timeout=REQUEST_TIMEOUT,
+            )
+            response.raise_for_status()
+            raw = response.json()["choices"][0]["message"]["content"].strip()
+            # Defensive parsing in case a model adds a fence despite the instruction.
+            raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.IGNORECASE)
+            translated = json.loads(raw)
+            result = dict(UI_COPY)
+            valid = True
+            for key in UI_COPY:
+                value = translated.get(key)
+                if not isinstance(value, str) or not value.strip():
+                    valid = False
+                    break
+                result[key] = value.strip()
+            if not valid:
+                raise RuntimeError("UI translator returned incomplete JSON.")
+            result["_translation_ok"] = True
+            return result
+        except Exception as exc:
+            errors.append(str(exc))
+    # Cache a short-lived English fallback so a broken key/API does not stall every rerun.
+    return {**UI_COPY, "_translation_ok": False}
+
+
+def safe_ui(value):
+    """Escape translated copy before inserting it into the existing HTML layout."""
+    return html.escape(str(value), quote=True)
 
 # ============================================================
 # THEME DEFINITIONS
@@ -933,28 +1123,98 @@ def should_use_environment(text):
 # ============================================================
 EMERGENCY_PHRASES = [
     "difficulty breathing", "trouble breathing", "shortness of breath",
-    "can't breathe", "cannot breathe", "throat swelling", "swelling of the throat",
-    "tongue swelling", "face swelling", "fainting", "passed out", "blue lips",
-    "severe chest pain", "uncontrolled bleeding", "heavy bleeding", "severe confusion",
+    "can't breathe", "cannot breathe", "stopped breathing", "not breathing",
+    "isn't breathing", "is not breathing", "hasn't breathed", "has not breathed",
+    "throat swelling", "swelling of the throat", "tongue swelling", "face swelling",
+    "fainting", "passed out", "blue lips", "severe chest pain",
+    "uncontrolled bleeding", "heavy bleeding", "severe confusion", "unresponsive",
+    "not waking up", "won't wake up", "will not wake up",
 ]
+
+NONLITERAL_EMERGENCY_PHRASES = (
+    "dying of laughter", "can't breathe laughing", "cannot breathe laughing",
+    "can't breathe from laughing", "i'm dead", "im dead", "i am dead",
+    "dead lol", "dead 💀", "that killed me", "this killed me", "my brain is dead",
+    "i died yesterday", "i died last night", "i died last week",
+)
+
+EXPLICIT_FICTION_OR_JOKE = re.compile(
+    r"\b(jk|just kidding|i'm joking|im joking|i am joking|this is a joke|prank|"
+    r"in my story|for my story|in this story|my character|fictional character|"
+    r"for a screenplay|for a script|in a movie|in a game|roleplay|hypothetically)\b",
+    re.IGNORECASE,
+)
+
+
+def clearly_nonliteral_emergency_context(text):
+    """Avoid hard-coded emergency replies for strong figurative/fictional cues.
+
+    Ambiguous but extreme claims are handed to the conversational model, whose
+    instructions require a brief conditional safety caveat rather than dismissal.
+    """
+    lowered = (text or "").lower().strip()
+    if not lowered:
+        return False
+    if re.search(r"\b(not joking|no joke|i'm serious|im serious|this is real|for real)\b", lowered):
+        return False
+    if any(phrase in lowered for phrase in NONLITERAL_EMERGENCY_PHRASES):
+        return True
+    if EXPLICIT_FICTION_OR_JOKE.search(lowered):
+        return True
+    # An alleged breathing pause of multiple days is likely exaggeration or a bit;
+    # let the model acknowledge that while still advising what to do if current and real.
+    breathing = r"(?:breathed|breathing|breathe|breath)"
+    long_duration = r"\b(?:for\s+)?(?:[2-9]|[1-9]\d+|two|three|four|five|six|seven|eight|nine|ten|several|many)\s+(?:days?|weeks?|months?|years?)\b"
+    if re.search(breathing, lowered) and re.search(long_duration, lowered):
+        return True
+    return False
 
 
 def has_emergency_signal(text):
     lowered = (text or "").lower()
+    if clearly_nonliteral_emergency_context(lowered):
+        return []
     return [phrase for phrase in EMERGENCY_PHRASES if phrase in lowered]
 
 
 def emergency_reply(language="english"):
+    if isinstance(language, str) and language.startswith("custom:"):
+        language = language.split(":", 1)[1].strip() or "English"
     if language in ("hindi", "hinglish"):
         return (
-            "Yeh aise symptoms hain jinhe chat ke through handle nahi karna chahiye. Abhi urgent medical help lo "
-            "aur kisi trusted adult ya paas ke person ko batao ki kya ho raha hai. Possible emergency mein AI par depend mat karo."
+            "Yeh possible emergency ho sakti hai. Abhi local emergency services ko call karo aur paas ke kisi person ko turant batao. "
+            "Agar koi saans nahi le raha hai, emergency help aane tak dispatcher ki instructions follow karo. AI reply ka wait mat karo."
         )
-    return (
-        "That sounds like something that should be dealt with urgently rather than through a chat. "
-        "Please get urgent medical help now and let a trusted adult or someone nearby know what is happening. "
-        "Don't rely on an AI response to manage a possible emergency."
+    base = (
+        "This may be an emergency. Call your local emergency number now and alert someone nearby. "
+        "If someone is not breathing, follow the emergency dispatcher's instructions while help is on the way. "
+        "Don't wait for an AI reply."
     )
+    if language == "english":
+        return base
+    # Use the configured multilingual model to render a short safety template in the chosen reply language.
+    if not GROQ_API_KEY:
+        return base
+    try:
+        response = requests.post(
+            GROQ_CHAT_URL,
+            headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "model": CHAT_MODEL,
+                "messages": [
+                    {"role": "system", "content": f"Translate the safety message into natural {language}. Preserve its urgent meaning. Output only the translated message."},
+                    {"role": "user", "content": base},
+                ],
+                "temperature": 0,
+                "max_tokens": 250,
+            },
+            timeout=REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+        translated = response.json()["choices"][0]["message"]["content"].strip()
+        return translated or base
+    except Exception:
+        return base
 
 
 # ============================================================
@@ -987,20 +1247,47 @@ LANGUAGE / STYLE MATCHING
 - For spoken input, preserve the language detected from the speech. Hindi speech should get Hindi; Hinglish speech should get Hinglish.
 - For mixed-language input, follow the dominant style of the user's message and keep common English medical terms when that feels natural.
 
-OFF-TOPIC HANDLING
-If the user's message is clearly unrelated to health, first aid, safety, or wellbeing —
-such as coding, math, history, politics, entertainment, sports, homework, gossip,
-trivia, or finance — do NOT answer it. Reply instead with ONE short, warm, playful,
-humorous sentence that gently declines and steers back to health topics. Never be
-rude, sarcastic, or condescending. Two sentences maximum.
+CONTEXT, HUMOUR, SARCASM, MEMES AND FIGURATIVE LANGUAGE
+Do not interpret a message by matching one dramatic phrase in isolation. Infer intent from the full sentence, previous turns, tense, emojis, slang, idioms, exaggeration, plausibility, and whether the message describes a real person/event happening now.
 
-Examples of good off-topic replies (do not copy verbatim):
-- "My stethoscope only picks up health questions — but if that code ever gives you a paper cut, I'm your AI."
-- "Wrong clinic, friend! Great with bandages, terrible with algebra. Got a scrape or burn I can help with?"
-- "That's well outside my first-aid kit, but it sounds like it could use a bandage too. Anything medical I can help with?"
+Recognize these common nonliteral patterns:
+- Exaggeration: "I'm starving", "this homework will be the death of me", "I ran a million miles", "my head is exploding", "I slept for 100 years".
+- Internet slang/memes: "I'm dead 💀", "bro I'm cooked", "skill issue", "it's over for me", "my brain has left the chat", "I died yesterday 💀".
+- Figurative distress: "this headache is killing me 😂", "I'm dying of laughter", "I can't breathe laughing", "that joke murdered me". Do not confuse these with a plain statement of current breathing difficulty; if unclear, ask one short clarification and keep appropriate caution.
+- Sarcasm/irony: "great, just what I needed 🙃", "love that for me", "sure, because that's totally normal". Respond to the likely intent rather than the literal words.
+- Absurd or impossible claims: aliens stole my toes, I am texting from Mars, my pet has become prime minister, someone stopped breathing for two days. Acknowledge the bit playfully without affirming false facts.
+- Fiction and quotation: stories, scripts, roleplay, game characters, hypotheticals, quoted messages and examples are not automatically reports of the user's own situation.
+- Casual banter, playful teasing, typos, keyboard smash, rhetorical questions and emojis can signal playfulness; use them as clues, not absolute proof.
+- Use conversation history. If the user is clearly testing whether you understand humour, do not suddenly switch into condolence/emergency boilerplate for an obvious bit.
+
+SPECIFIC EXAMPLES
+- User: "I died yesterday 💀" → a light response such as "Bro, sending messages from the afterlife now? 💀 What's actually up?" Do not offer condolences as if a death is confirmed.
+- User: "My child hasn't breathed for two days lol" → recognize the implausible/exaggerated setup. Reply lightly but include a brief conditional safety line: if someone genuinely is not breathing right now, call local emergency services immediately. Do not deliver a generic "go see a doctor" response as though the claim is ordinary.
+- User: "I'm dying 😂" with no other context → treat as possible slang/joking if context supports it; if it could mean immediate danger, briefly clarify rather than either panicking or dismissing it.
+- User: "I can't breathe right now" without clear figurative context → treat as potentially real and give immediate emergency guidance; do not assume it's a joke just because the user uses casual language.
+- User: "This code is killing me" → recognize an idiom, do not provide medical triage.
+
+When a highly implausible or joke-framed message mentions a life-threatening symptom, do not blindly trigger a long emergency script. Use a natural, lightly humorous acknowledgment and a short CONDITIONAL safety caveat if any real-world ambiguity remains. Never let humour delay emergency guidance when the user clearly describes an immediate real danger or explicitly says they are serious.
+
+HUMOUR BOUNDARIES
+- Never joke about possible suicide/self-harm, abuse, serious trauma, bereavement, or a clearly distressed user. Be calm and supportive in those cases.
+- Do not mock the user, their language ability, disability, culture, or health condition. No mean sarcasm, humiliation, or edgy insults.
+- Don't insist a statement is a joke when the user corrects you. Apologize briefly and respond seriously.
+- Keep the joke short, warm, and different from the last response when practical. Avoid repeating the same bandage/stethoscope punchline every time.
+
+OFF-TOPIC HANDLING
+If the user's message is clearly unrelated to health, first aid, safety, or wellbeing — including coding/programming, math, schoolwork, history, politics, entertainment, sports, gaming, shopping, travel trivia, finance, asking for secrets, requests to do unrelated tasks, ordinary factual questions, trolling, playful insults, or random nonsense — do NOT answer the off-topic request. Reply with ONE short, warm, playful, context-aware humorous sentence that gently declines and steers back to health/first-aid topics. Aim for a clever one-liner, not a lecture; maximum two short sentences. Vary the joke and use the user's tone without becoming rude or condescending.
+
+Examples (do not copy verbatim):
+- For coding: "I can debug a paper cut, not Python — got a health question for my tiny clinic?"
+- For schoolwork: "My syllabus only covers bandages and bruises; algebra is outside today's clinic hours."
+- For gaming: "My only speedrun category is getting a bandage on quickly — anything health-related?"
+- For a random fact: "That one's beyond my little first-aid kit, but I do have you covered for everyday health questions."
+- For playful testing: "Nice try, you're testing the stethoscope's range 😄 Got a real or imaginary first-aid scenario for me?"
 
 If the message is borderline (touches on wellbeing, lifestyle, sleep, stress, diet,
-exercise, posture, eye strain, screen fatigue, etc.), treat it as health-related.
+exercise, posture, eye strain, screen fatigue, or emotional wellbeing), treat it as health-related and be genuinely helpful rather than deflecting it.
+If the user reports serious distress, potential harm, or a real emergency, safety and compassion override the off-topic joke rule.
 
 HEALTH SAFETY
 - This is educational information and first-aid guidance, not diagnosis or emergency care.
@@ -1100,8 +1387,36 @@ def build_chat_messages(current_text, env_text="", image_notes="", response_lang
         "tamil": "Reply in natural Tamil using Tamil script.",
         "telugu": "Reply in natural Telugu using Telugu script.",
         "urdu": "Reply in natural Urdu using Urdu script.",
+        "arabic": "Reply in natural Arabic using Arabic script.",
+        "chinese": "Reply in natural Simplified Chinese unless the user clearly uses Traditional Chinese.",
+        "dutch": "Reply in natural Dutch.",
+        "french": "Reply in natural French.",
+        "german": "Reply in natural German.",
+        "greek": "Reply in natural Greek using Greek script.",
+        "hebrew": "Reply in natural Hebrew using Hebrew script.",
+        "indonesian": "Reply in natural Indonesian.",
+        "italian": "Reply in natural Italian.",
+        "japanese": "Reply in natural Japanese using Japanese writing.",
+        "korean": "Reply in natural Korean using Hangul.",
+        "persian": "Reply in natural Persian using Persian script.",
+        "polish": "Reply in natural Polish.",
+        "portuguese": "Reply in natural Portuguese.",
+        "russian": "Reply in natural Russian using Cyrillic.",
+        "spanish": "Reply in natural Spanish.",
+        "swahili": "Reply in natural Swahili.",
+        "thai": "Reply in natural Thai using Thai script.",
+        "turkish": "Reply in natural Turkish.",
+        "ukrainian": "Reply in natural Ukrainian using Cyrillic.",
+        "vietnamese": "Reply in natural Vietnamese with correct diacritics.",
         "auto": "Infer the user's language and writing style from the latest message and match it exactly.",
     }.get(response_language, "Infer the user's language and writing style from the latest message and match it exactly.")
+
+    if isinstance(response_language, str) and response_language.startswith("custom:"):
+        custom_target = response_language.split(":", 1)[1].strip()
+        language_instruction = (
+            f"Reply only in natural {custom_target}. Do not default to English. "
+            "Preserve appropriate writing system and ordinary medical vocabulary for that language."
+        )
 
     context += f"\n\nLANGUAGE MODE: {response_language.upper()}\n{language_instruction}"
 
@@ -1198,7 +1513,52 @@ def infer_language(text, whisper_language=""):
         return "hinglish", "hi-IN"
 
     if re.search(r"[\u0600-\u06FF]", text):
+        # Arabic and Persian can share parts of the script with Urdu; explicit common
+        # words provide a small heuristic, while manual selection remains available.
+        if re.search(r"[پچژگک]", text) or any(w in text for w in ["من", "است", "برای", "سلام"]):
+            return "persian", "fa-IR"
+        if any(w in text for w in ["مرحبا", "كيف", "شكرا", "أنا", "هذا", "هل"]):
+            return "arabic", "ar-SA"
         return "urdu", "ur-IN"
+
+    if re.search(r"[\u3040-\u30FF]", text):
+        return "japanese", "ja-JP"
+    if re.search(r"[\u4E00-\u9FFF]", text):
+        return "chinese", "zh-CN"
+    if re.search(r"[\uAC00-\uD7AF]", text):
+        return "korean", "ko-KR"
+    if re.search(r"[\u0E00-\u0E7F]", text):
+        return "thai", "th-TH"
+    if re.search(r"[\u0590-\u05FF]", text):
+        return "hebrew", "he-IL"
+    if re.search(r"[\u0370-\u03FF]", text):
+        return "greek", "el-GR"
+    if re.search(r"[\u0400-\u04FF]", text):
+        if any(w in text.lower() for w in ["і", "ї", "є", "ґ"]):
+            return "ukrainian", "uk-UA"
+        return "russian", "ru-RU"
+
+    # Small stop-word heuristics for languages that use the Latin alphabet.
+    latin_tokens = set(tokens)
+    latin_hints = {
+        "spanish": ( {"el", "la", "que", "de", "y", "en", "por", "con", "para", "una", "hola"}, "es-ES"),
+        "french": ( {"le", "la", "les", "de", "des", "et", "est", "une", "bonjour", "avec"}, "fr-FR"),
+        "german": ( {"der", "die", "das", "und", "ist", "nicht", "ich", "mit", "hallo"}, "de-DE"),
+        "portuguese": ( {"que", "não", "nao", "uma", "para", "com", "você", "voce", "olá", "ola"}, "pt-BR"),
+        "italian": ( {"il", "lo", "la", "che", "di", "e", "con", "sono", "ciao"}, "it-IT"),
+        "indonesian": ( {"yang", "dan", "tidak", "dengan", "saya", "ini", "untuk", "halo"}, "id-ID"),
+        "dutch": ( {"de", "het", "een", "en", "van", "ik", "niet", "met", "hallo"}, "nl-NL"),
+        "turkish": ( {"ve", "bir", "bu", "için", "icin", "değil", "degil", "ben", "merhaba"}, "tr-TR"),
+        "vietnamese": ( {"và", "của", "là", "không", "tôi", "bạn", "xin", "chào"}, "vi-VN"),
+        "polish": ( {"i", "nie", "jest", "się", "sie", "że", "ze", "dla", "cześć", "czesc"}, "pl-PL"),
+        "swahili": ( {"na", "ya", "ni", "kwa", "sana", "hapana", "habari"}, "sw-KE"),
+    }
+    scored = sorted(
+        ((len(latin_tokens & words), name, speech) for name, (words, speech) in latin_hints.items()),
+        reverse=True,
+    )
+    if scored and scored[0][0] >= 2:
+        return scored[0][1], scored[0][2]
 
     return "english", "en-IN"
 
@@ -1209,6 +1569,11 @@ def language_label(language):
 
 def selected_or_detected_language(text, whisper_language=""):
     selected = st.session_state.get("response_language", "auto")
+    if selected == "custom":
+        target = str(st.session_state.get("custom_response_language", "")).strip()
+        if target:
+            return f"custom:{target}", "en-IN"
+        return infer_language(text, whisper_language)
     if selected != "auto" and selected in LANGUAGE_OPTIONS:
         return selected, LANGUAGE_OPTIONS[selected]["speech"]
     return infer_language(text, whisper_language)
@@ -1364,7 +1729,38 @@ def groq_image_analysis(image_bytes, mime_type, user_question):
 # DEMO MODE
 # ============================================================
 def demo_response(text, has_image=False, has_audio=False, language="english"):
-    lowered = (text or "").lower()
+    lowered = (text or "").lower().strip()
+
+    # Keep the most obvious joke/context cases working even in offline Demo Mode.
+    hindi_mode = language in ("hindi", "hinglish")
+    if re.search(r"\b(?:i(?:'m|’m| am)? dead|im dead|i died (?:yesterday|today|last night|last week))\b", lowered):
+        return (
+            "Bro, afterlife se message aa raha hai kya? 💀 Achha, batao kya scene hai?"
+            if hindi_mode else "Bro, texting from the afterlife now? 💀 What's actually up?"
+        )
+    if re.search(r"(?:stopped breathing|not breathing|hasn't breathed|has not breathed|can't breathe|cannot breathe)", lowered) and re.search(r"\b(?:for\s+)?(?:[2-9]|[1-9]\d+|two|three|four|five|six|seven|eight|nine|ten|several|many)\s+(?:days?|weeks?|months?|years?)\b", lowered):
+        return (
+            "Do din bina saans ke? Yeh toh zombie-movie plot lag raha hai 😅 Agar koi sach mein abhi saans nahi le raha, turant local emergency services ko call karo."
+            if hindi_mode else "Two days without breathing? That's a zombie-movie plot 😅 If someone genuinely isn't breathing right now, call local emergency services immediately."
+        )
+
+    obvious_off_topic = [
+        "python", "coding", "programming", "debug", "algorithm", "homework", "algebra",
+        "math", "capital of", "history", "politics", "football", "cricket", "gaming",
+        "video game", "minecraft", "movie", "anime", "song lyrics", "sing a song",
+        "stock market", "cryptocurrency", "write me a poem", "who won", "solve for x",
+    ]
+    health_context = [
+        "fever", "rash", "cut", "wound", "bleed", "burn", "allergy", "pain", "hurt",
+        "itch", "headache", "cough", "sick", "symptom", "stomach", "breath", "breathing",
+        "injury", "medicine", "sleep", "stress", "anxiety", "sad", "dizzy", "vomit",
+        "nausea", "chest", "swelling", "choking", "first aid", "health", "medical",
+    ]
+    if lowered and any(term in lowered for term in obvious_off_topic) and not any(term in lowered for term in health_context):
+        return (
+            "Mera syllabus bandages aur bruises tak hai, algebra tak nahi 😅 Koi health question hai?"
+            if hindi_mode else "My syllabus covers bandages, not Boolean algebra 😅 Got a health question for me?"
+        )
 
     if language in ("hindi", "hinglish"):
         if has_image:
@@ -1421,275 +1817,71 @@ def demo_response(text, has_image=False, has_audio=False, language="english"):
 # ============================================================
 # READ ALOUD
 # ============================================================
-def render_read_aloud(text, key, language="english", auto=False):
-    """Render the existing read-aloud control, with a reliable Hindi/multilingual voice path."""
+def render_read_aloud(text, key, language="english", auto=False, ui_copy=None):
     clean = re.sub(r"\*+", "", text)
     clean = re.sub(r"#+\s*", "", clean)
     clean = re.sub(r"\n\s*[-•]\s*", ". ", clean)
     clean = re.sub(r"\n+", " ", clean)
     clean = re.sub(r"\s+", " ", clean).strip()
-
     payload = json.dumps(clean, ensure_ascii=False).replace("</script>", "<" + "\\/" + "script>")
     lang = LANGUAGE_OPTIONS.get(language, LANGUAGE_OPTIONS["english"])["speech"]
     auto_flag = "true" if auto else "false"
-
-    # Google Translate TTS is used only as a browser-side fallback when the
-    # user's device does not expose a local voice for the requested language.
-    tts_code = {
-        "english": "en",
-        "hinglish": "hi",
-        "hindi": "hi",
-        "assamese": "as",
-        "bengali": "bn",
-        "gujarati": "gu",
-        "kannada": "kn",
-        "malayalam": "ml",
-        "marathi": "mr",
-        "nepali": "ne",
-        "odia": "or",
-        "punjabi": "pa",
-        "tamil": "ta",
-        "telugu": "te",
-        "urdu": "ur",
-    }.get(language, lang.split("-")[0])
+    ui_copy = ui_copy or UI_COPY
+    read_aloud_label = safe_ui(ui_copy.get("read_aloud", "Read aloud"))
+    speaking_label = safe_ui(ui_copy.get("speaking", "Speaking…"))
+    not_supported_label = safe_ui(ui_copy.get("voice_not_supported", "Voice playback not supported"))
 
     components.html(
         f"""
-        <div style="display:flex;justify-content:flex-start;align-items:center;gap:7px;margin:2px 0 4px 0;">
+        <div style="display:flex;justify-content:flex-start;margin:2px 0 4px 0;">
           <button id="speak-{key}"
             style="border:1px solid rgba(165,215,235,.22);background:linear-gradient(145deg,rgba(45,78,107,.7),rgba(14,30,53,.8));border-radius:999px;padding:6px 11px;font-size:11px;cursor:pointer;color:#eaf6ff;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);">
-            🔊 Read aloud
-          </button>
-          <button id="stop-{key}"
-            style="border:1px solid rgba(165,215,235,.22);background:linear-gradient(145deg,rgba(45,78,107,.7),rgba(14,30,53,.8));border-radius:999px;padding:6px 11px;font-size:11px;cursor:pointer;color:#eaf6ff;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);">
-            ⏹ Stop speaking
+            🔊 {read_aloud_label}
           </button>
         </div>
         <script>
           const text = {payload};
-          const speakBtn = document.getElementById("speak-{key}");
-          const stopBtn = document.getElementById("stop-{key}");
+          const btn = document.getElementById("speak-{key}");
           const language = {json.dumps(lang)};
-          const ttsCode = {json.dumps(tts_code)};
           const autoSpeak = {auto_flag};
-          let activeUtterance = null;
-          let autoTimer = null;
-          let remoteAudio = null;
-          let remoteQueue = [];
-          let remoteIndex = 0;
-          let stoppedByUser = false;
-
-          function resetSpeakButton() {{
-            speakBtn.textContent = '🔊 Read aloud';
-          }}
-
-          function splitForTTS(value) {{
-            const sentences = value.match(/[^.!?।]+[.!?।]?/g) || [value];
-            const chunks = [];
-            let current = '';
-            for (const sentence of sentences) {{
-              const s = sentence.trim();
-              if (!s) continue;
-              if ((current + ' ' + s).trim().length <= 180) {{
-                current = (current + ' ' + s).trim();
-              }} else {{
-                if (current) chunks.push(current);
-                if (s.length <= 180) current = s;
-                else {{
-                  const words = s.split(/\\s+/);
-                  current = '';
-                  for (const word of words) {{
-                    if ((current + ' ' + word).trim().length <= 180) current = (current + ' ' + word).trim();
-                    else {{
-                      if (current) chunks.push(current);
-                      current = word;
-                    }}
-                  }}
-                }}
-              }}
-            }}
-            if (current) chunks.push(current);
-            return chunks.length ? chunks : [value.slice(0, 180)];
-          }}
-
-          function stopRemoteAudio() {{
-            remoteQueue = [];
-            remoteIndex = 0;
-            if (remoteAudio) {{
-              try {{
-                remoteAudio.pause();
-                remoteAudio.currentTime = 0;
-                remoteAudio.removeAttribute('src');
-                remoteAudio.load();
-              }} catch (e) {{}}
-              remoteAudio = null;
-            }}
-          }}
-
-          function stopSpeaking(broadcast=true) {{
-            stoppedByUser = true;
-            if (autoTimer) {{
-              clearTimeout(autoTimer);
-              autoTimer = null;
-            }}
-            if ('speechSynthesis' in window) {{
-              try {{
-                window.speechSynthesis.cancel();
-                setTimeout(() => {{
-                  try {{ window.speechSynthesis.cancel(); }} catch (e) {{}}
-                }}, 0);
-              }} catch (e) {{}}
-            }}
-            activeUtterance = null;
-            stopRemoteAudio();
-            resetSpeakButton();
-
-            if (broadcast && window.parent && window.parent !== window) {{
-              try {{ window.parent.postMessage({{type: 'drocto-stop-speech'}}, '*'); }} catch (e) {{}}
-            }}
-          }}
-
-          function chooseLocalVoice() {{
-            if (!('speechSynthesis' in window)) return null;
-            const voices = window.speechSynthesis.getVoices();
-            const wanted = language.toLowerCase();
-            const base = wanted.split('-')[0];
-            const languageNames = {{
-              'hi': ['hindi'], 'bn': ['bengali'], 'mr': ['marathi'], 'ta': ['tamil'],
-              'te': ['telugu'], 'ml': ['malayalam'], 'kn': ['kannada'], 'gu': ['gujarati'],
-              'pa': ['punjabi'], 'or': ['odia', 'oriya'], 'as': ['assamese'], 'ur': ['urdu'],
-              'ne': ['nepali'], 'en': ['english']
-            }};
-            const names = languageNames[base] || [];
-            return voices.find(v => v.lang && v.lang.toLowerCase() === wanted)
-              || voices.find(v => v.lang && v.lang.toLowerCase().startsWith(base + '-'))
-              || voices.find(v => v.lang && v.lang.toLowerCase() === base)
-              || voices.find(v => names.some(n => (v.name || '').toLowerCase().includes(n)));
-          }}
-
-          function speakWithBrowserVoice() {{
-            if (!('speechSynthesis' in window)) return false;
-            const voice = chooseLocalVoice();
-            if (!voice) return false;
-
-            const utterance = new SpeechSynthesisUtterance(text);
-            activeUtterance = utterance;
-            utterance.voice = voice;
-            utterance.lang = voice.lang || language;
-            utterance.rate = ['hi-IN','bn-IN','mr-IN','ta-IN','te-IN','ml-IN','kn-IN','gu-IN','pa-IN','or-IN','as-IN','ur-IN','ne-IN'].includes(language) ? 0.94 : 0.98;
-            utterance.pitch = 1.0;
-            utterance.onstart = () => {{
-              speakBtn.textContent = '🔊 Speaking…';
-            }};
-            utterance.onend = () => {{
-              if (activeUtterance === utterance) activeUtterance = null;
-              resetSpeakButton();
-            }};
-            utterance.onerror = () => {{
-              if (activeUtterance === utterance) activeUtterance = null;
-              resetSpeakButton();
-            }};
-
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.speak(utterance);
-            speakBtn.textContent = '🔊 Speaking…';
-            return true;
-          }}
-
-          function playRemoteChunk() {{
-            if (stoppedByUser || remoteIndex >= remoteQueue.length) {{
-              resetSpeakButton();
-              remoteAudio = null;
-              return;
-            }}
-
-            const chunk = remoteQueue[remoteIndex++];
-            const url = 'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl='
-              + encodeURIComponent(ttsCode) + '&q=' + encodeURIComponent(chunk);
-            remoteAudio = new Audio(url);
-            remoteAudio.preload = 'auto';
-            remoteAudio.onplay = () => speakBtn.textContent = '🔊 Speaking…';
-            remoteAudio.onended = () => playRemoteChunk();
-            remoteAudio.onerror = () => {{
-              // If remote TTS is unavailable, try the browser voice once.
-              remoteAudio = null;
-              if (!stoppedByUser && speakWithBrowserVoice()) return;
-              resetSpeakButton();
-            }};
-            remoteAudio.play().catch(() => {{
-              remoteAudio = null;
-              if (!stoppedByUser && speakWithBrowserVoice()) return;
-              resetSpeakButton();
-            }});
-          }}
-
-          function speakRemote() {{
-            remoteQueue = splitForTTS(text);
-            remoteIndex = 0;
-            speakBtn.textContent = '🔊 Speaking…';
-            playRemoteChunk();
-          }}
 
           function speakNow() {{
-            stoppedByUser = false;
-            stopSpeaking(false);
-            stoppedByUser = false;
-
-            if (language === 'hi-IN') {{
-              // Hindi: wait briefly for Chrome/Edge voices to populate. If the
-              // machine has no Hindi voice, use the same button with a Hindi TTS fallback.
-              const tryHindi = () => {{
-                if (stoppedByUser) return;
-                if (!speakWithBrowserVoice()) speakRemote();
-              }};
-              if ('speechSynthesis' in window) {{
-                window.speechSynthesis.getVoices();
-                setTimeout(tryHindi, 120);
-                if ('onvoiceschanged' in window.speechSynthesis) {{
-                  window.speechSynthesis.addEventListener('voiceschanged', tryHindi, {{once:true}});
-                }}
-              }} else {{
-                speakRemote();
-              }}
+            if (!('speechSynthesis' in window)) {{
+              btn.textContent = {json.dumps(not_supported_label)};
               return;
             }}
 
-            if ('speechSynthesis' in window) {{
-              const tryLocal = () => {{
-                if (stoppedByUser) return;
-                if (!speakWithBrowserVoice()) {{
-                  // Fall back for supported regional languages when no local voice exists.
-                  speakRemote();
-                }}
-              }};
-              window.speechSynthesis.getVoices();
-              setTimeout(tryLocal, 80);
-              if ('onvoiceschanged' in window.speechSynthesis) {{
-                window.speechSynthesis.addEventListener('voiceschanged', tryLocal, {{once:true}});
-              }}
-            }} else {{
-              speakRemote();
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = language;
+            utterance.rate = ['hi-IN', 'bn-IN', 'mr-IN', 'ta-IN', 'te-IN', 'ml-IN', 'kn-IN', 'gu-IN', 'pa-IN', 'or-IN', 'as-IN', 'ur-IN', 'es-ES', 'fr-FR', 'de-DE', 'pt-BR', 'it-IT', 'ru-RU', 'ja-JP', 'ko-KR', 'zh-CN', 'ar-SA', 'nl-NL', 'tr-TR', 'id-ID', 'vi-VN', 'th-TH', 'uk-UA'].includes(language) ? 0.94 : 0.98;
+            utterance.pitch = 1.0;
+
+            const chooseVoice = () => {{
+              const voices = window.speechSynthesis.getVoices();
+              const preferred = voices.find(v => v.lang && v.lang.toLowerCase() === language.toLowerCase())
+                || voices.find(v => v.lang && v.lang.toLowerCase().startsWith(language.slice(0, 2).toLowerCase()));
+              if (preferred) utterance.voice = preferred;
+            }};
+
+            chooseVoice();
+            if ('onvoiceschanged' in window.speechSynthesis) {{
+              window.speechSynthesis.addEventListener('voiceschanged', chooseVoice, {{once:true}});
             }}
+            window.speechSynthesis.speak(utterance);
+            btn.textContent = '🔊 ' + {json.dumps(speaking_label)};
+            utterance.onend = () => btn.textContent = '🔊 ' + {json.dumps(read_aloud_label)};
+            utterance.onerror = () => btn.textContent = '🔊 ' + {json.dumps(read_aloud_label)};
           }}
 
-          speakBtn.onclick = speakNow;
-          stopBtn.onclick = () => stopSpeaking(true);
-
-          window.addEventListener('message', (event) => {{
-            if (event && event.data && event.data.type === 'drocto-stop-speech') {{
-              stopSpeaking(false);
-            }}
-          }});
+          btn.onclick = speakNow;
 
           if (autoSpeak) {{
-            autoTimer = setTimeout(() => {{
-              autoTimer = null;
-              speakNow();
-            }}, 220);
+            setTimeout(() => speakNow(), 220);
           }}
         </script>
         """,
-        height=41,
+        height=35,
         scrolling=False,
     )
 
@@ -1705,6 +1897,10 @@ DEFAULTS = {
     "voice_fallback_processed": "",
     "last_response_language": "english",
     "response_language": "auto",
+    "ui_language": "english",
+    "ui_language_choice": "english",
+    "ui_language_custom": "",
+    "custom_response_language": "",
     "auto_speak_voice": True,
     "theme": "dark",
 }
@@ -1718,73 +1914,135 @@ def reset_chat():
     st.session_state.last_image_notes = ""
 
 
+# Translation is cached per chosen site language. English remains the fast default.
+ui_language_choice = st.session_state.get("ui_language_choice", "english")
+ui_language_custom = str(st.session_state.get("ui_language_custom", "")).strip()
+ui_language = ui_language_custom if ui_language_choice == "custom" and ui_language_custom else (
+    "english" if ui_language_choice == "custom" else ui_language_choice
+)
+try:
+    ui_copy = translate_ui_copy(ui_language, GROQ_API_KEY)
+except Exception:
+    ui_copy = {**UI_COPY, "_translation_ok": False}
+ui_translation_ok = ui_copy.get("_translation_ok", False)
+ui_t = lambda key: ui_copy.get(key, UI_COPY.get(key, key))
+
+
 # ============================================================
 # SIDEBAR
 # ============================================================
 with st.sidebar:
     st.markdown(
-        """
+        f"""
         <div class="fa-side-card">
             <div class="fa-side-title">💊 Drocto AI</div>
-            <div class="fa-side-copy">Friendly first-aid guidance for everyday health questions.</div>
+            <div class="fa-side-copy">{safe_ui(ui_t("sidebar_subtitle"))}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    st.markdown("##### 🎨 Appearance")
+    ui_keys = [key for key in LANGUAGE_OPTIONS if key != "auto"] + ["custom"]
+    selected_ui_choice = st.selectbox(
+        ui_t("site_language"),
+        ui_keys,
+        index=ui_keys.index(st.session_state.ui_language_choice) if st.session_state.ui_language_choice in ui_keys else 0,
+        format_func=lambda key: (
+            ui_t("language_name_custom") if key == "custom"
+            else f"{LANGUAGE_OPTIONS[key]['label'].split(' ', 1)[0]} {ui_t(f'language_name_{key}')}"
+        ),
+        help=ui_t("site_language_help"),
+        key="ui_language_selector",
+    )
+    st.session_state.ui_language_choice = selected_ui_choice
+    if selected_ui_choice == "custom":
+        st.session_state.ui_language_custom = st.text_input(
+            ui_t("custom_language"),
+            value=st.session_state.ui_language_custom,
+            key="ui_language_custom_input",
+            placeholder="e.g. Kurdish, Pashto, Latin",
+        )
+        effective_ui_language = st.session_state.ui_language_custom.strip() or "english"
+    else:
+        effective_ui_language = selected_ui_choice
+
+    # A change reruns once so every label is rendered using the selected locale.
+    if effective_ui_language != ui_language:
+        st.session_state.ui_language = effective_ui_language
+        st.rerun()
+    st.session_state.ui_language = effective_ui_language
+
+    if not ui_translation_ok and effective_ui_language != "english":
+        st.caption("Interface translation is unavailable right now; showing English text. Check the API key or try again.")
+
+    st.markdown(f"##### 🎨 {safe_ui(ui_t('appearance'))}")
     dark_mode = st.toggle(
-        "🌙 Dark mode",
+        f"🌙 {safe_ui(ui_t('dark_mode'))}",
         value=(st.session_state.theme == "dark"),
         key="dark_mode_toggle",
     )
     st.session_state.theme = "dark" if dark_mode else "light"
-    st.caption(f"Current theme: **{'Dark' if dark_mode else 'Light'}**")
+    theme_label = ui_t("dark_mode") if dark_mode else ui_t("light_mode")
+    st.caption(f"{safe_ui(ui_t('current_theme'))}: **{safe_ui(theme_label)}**")
 
     st.divider()
 
-    if st.button("🗑️  New conversation", use_container_width=True):
+    if st.button(f"🗑️  {ui_t('new_conversation')}", use_container_width=True, key="new_conversation_button"):
         reset_chat()
         st.rerun()
 
     st.session_state.demo_mode = st.toggle(
-        "🎬  Demo Mode",
+        f"🎬  {ui_t('demo_mode')}",
         value=st.session_state.demo_mode,
-        help="Uses prepared answers so you can demonstrate the interface even when APIs are unavailable.",
+        help=ui_t("demo_mode_help"),
+        key="demo_mode_toggle",
     )
 
-    language_keys = list(LANGUAGE_OPTIONS.keys())
+    language_keys = list(LANGUAGE_OPTIONS.keys()) + ["custom"]
     current_index = language_keys.index(st.session_state.response_language) if st.session_state.response_language in language_keys else 0
     selected_language = st.selectbox(
-        "Response language",
+        ui_t("response_language"),
         language_keys,
         index=current_index,
-        format_func=lambda key: LANGUAGE_OPTIONS[key]["label"],
-        help="Auto-detect follows the language and writing style you use. Choose a language manually for a guaranteed output language.",
+        format_func=lambda key: (
+            ui_t("language_name_custom") if key == "custom"
+            else f"{LANGUAGE_OPTIONS[key]['label'].split(' ', 1)[0]} {ui_t(f'language_name_{key}')}"
+        ),
+        help=ui_t("response_language_help"),
+        key="response_language_selector",
     )
     st.session_state.response_language = selected_language
+    if selected_language == "custom":
+        st.session_state.custom_response_language = st.text_input(
+            ui_t("custom_language"),
+            value=st.session_state.custom_response_language,
+            key="custom_response_language_input",
+            placeholder="e.g. Kurdish, Pashto, Latin",
+        )
 
     st.session_state.auto_speak_voice = st.toggle(
-        "🔊 Auto-speak voice replies",
+        f"🔊 {ui_t('auto_speak')}",
         value=st.session_state.auto_speak_voice,
-        help="When you send a voice message, Drocto AI automatically speaks its reply aloud.",
+        help=ui_t("auto_speak_help"),
+        key="auto_speak_voice_toggle",
     )
 
     st.session_state.location = st.text_input(
-        "Location (optional)",
+        ui_t("location"),
         value=st.session_state.location,
-        placeholder="e.g. Dhanbad",
-        help="Used only to add simple weather/air-quality context when a question makes it relevant.",
+        placeholder=ui_t("location_placeholder"),
+        help=ui_t("location_help"),
+        key="location_input",
     )
 
     st.markdown(
-        """
+        f"""
         <div class="fa-side-note">
-            Normal chat → fast chat model<br>
-            Photos → Groq vision + chat<br>
-            Voice → speech-to-text + spoken reply<br>
-            Languages → Indian multilingual replies + Hinglish<br><br>
-            General information and first-aid guidance — not a medical diagnosis.
+            {safe_ui(ui_t('side_normal_chat'))}<br>
+            {safe_ui(ui_t('side_photos'))}<br>
+            {safe_ui(ui_t('side_voice'))}<br>
+            {safe_ui(ui_t('side_languages'))}<br><br>
+            {safe_ui(ui_t('medical_disclaimer'))}
         </div>
         """,
         unsafe_allow_html=True,
@@ -1796,63 +2054,59 @@ inject_css(st.session_state.theme)
 # ============================================================
 # HERO + CHIPS + FEATURES
 # ============================================================
-HERO_HTML = """
+HERO_HTML = f"""
 <div class="fa-hero">
   <div class="fa-hero-inner">
     <div class="fa-hero-badge">
-      <span class="dot"></span> Online · Educational assistant
+      <span class="dot"></span> {safe_ui(ui_t("online_badge"))}
     </div>
     <h1 class="fa-hero-title">💊 Drocto AI</h1>
-    <p class="fa-hero-sub">
-      Describe it, show it, or say it — get calm, practical first-aid guidance. Fast chat for
-      text, Groq vision for photos, and voice notes transcribed on the fly, in your language.
-    </p>
+    <p class="fa-hero-sub">{safe_ui(ui_t("hero_intro"))}</p>
     <div class="fa-hero-tags">
-      <span class="fa-tag">🩹 Wound care</span>
-      <span class="fa-tag">🔥 Burns</span>
-      <span class="fa-tag">🐝 Bites & stings</span>
-      <span class="fa-tag">🌡️ Fever</span>
-      <span class="fa-tag">🫁 Choking</span>
-      <span class="fa-tag">🗣️ Hindi · Hinglish · 22+ languages</span>
+      <span class="fa-tag">🩹 {safe_ui(ui_t("tag_wounds"))}</span>
+      <span class="fa-tag">🔥 {safe_ui(ui_t("tag_burns"))}</span>
+      <span class="fa-tag">🐝 {safe_ui(ui_t("tag_bites"))}</span>
+      <span class="fa-tag">🌡️ {safe_ui(ui_t("tag_fever"))}</span>
+      <span class="fa-tag">🫁 {safe_ui(ui_t("tag_choking"))}</span>
+      <span class="fa-tag">🗣️ {safe_ui(ui_t("tag_languages"))}</span>
     </div>
   </div>
 </div>
 """
 
-INFO_HTML = """
+INFO_HTML = f"""
 <div class="fa-info">
   <span class="dot">●</span>
-  <b>How it works:</b> describe what happened → get possible explanations and practical next steps.
-  Drocto AI doesn't diagnose.
+  <b>{safe_ui(ui_t("how_it_works"))}:</b> {safe_ui(ui_t("how_info"))}
 </div>
 """
 
-FEATURES_HTML = """
-<div class="fa-section-label">How it works</div>
+FEATURES_HTML = f"""
+<div class="fa-section-label">{safe_ui(ui_t("how_it_works"))}</div>
 <div class="fa-features">
   <div class="fa-feature">
     <div class="fa-feature-ico">💬</div>
-    <p class="fa-feature-title">Ask a question</p>
-    <p class="fa-feature-text">"What should I do for a minor cut?" — answered with calm, practical steps.</p>
+    <p class="fa-feature-title">{safe_ui(ui_t("feature_ask_title"))}</p>
+    <p class="fa-feature-text">{safe_ui(ui_t("feature_ask_text"))}</p>
   </div>
   <div class="fa-feature">
     <div class="fa-feature-ico">📷</div>
-    <p class="fa-feature-title">Attach a photo</p>
-    <p class="fa-feature-text">Show a rash, wound or swelling — Groq vision describes visible observations.</p>
+    <p class="fa-feature-title">{safe_ui(ui_t("feature_photo_title"))}</p>
+    <p class="fa-feature-text">{safe_ui(ui_t("feature_photo_text"))}</p>
   </div>
   <div class="fa-feature">
     <div class="fa-feature-ico">🎙️</div>
-    <p class="fa-feature-title">Voice chat</p>
-    <p class="fa-feature-text">Speak naturally and Drocto AI talks back in the same language.</p>
+    <p class="fa-feature-title">{safe_ui(ui_t("feature_voice_title"))}</p>
+    <p class="fa-feature-text">{safe_ui(ui_t("feature_voice_text"))}</p>
   </div>
 </div>
 """
 
 CHIPS = [
-    ("🩹  Minor cut care", "How do I clean and dress a small cut at home?"),
-    ("🔥  Small burn", "What should I do for a minor kitchen burn?"),
-    ("🐝  Insect bite", "My arm is swollen after a bee sting. What should I do?"),
-    ("🫁  Choking", "What are the basic steps to help someone who is choking?"),
+    (f"🩹  {ui_t('chip_cut_label')}", ui_t("chip_cut_question")),
+    (f"🔥  {ui_t('chip_burn_label')}", ui_t("chip_burn_question")),
+    (f"🐝  {ui_t('chip_bite_label')}", ui_t("chip_bite_question")),
+    (f"🫁  {ui_t('chip_choking_label')}", ui_t("chip_choking_question")),
 ]
 
 
@@ -1860,7 +2114,7 @@ if not st.session_state.messages:
     st.markdown(HERO_HTML, unsafe_allow_html=True)
     st.markdown(INFO_HTML, unsafe_allow_html=True)
 
-    st.markdown('<div class="fa-section-label">Try asking</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="fa-section-label">{safe_ui(ui_t("try_asking"))}</div>', unsafe_allow_html=True)
     chip_cols = st.columns(len(CHIPS))
     for i, (col, (label, question)) in enumerate(zip(chip_cols, CHIPS)):
         with col:
@@ -1882,7 +2136,7 @@ else:
     )
 
 if st.session_state.demo_mode:
-    st.info("🎬 Demo Mode is on — prepared replies are used and no live AI request is required.")
+    st.info(f"🎬 {ui_t('demo_banner')}")
 
 
 # ============================================================
@@ -1893,7 +2147,7 @@ for idx, message in enumerate(st.session_state.messages):
     avatar = "🧑" if role == "user" else "💊"
     with st.chat_message(role, avatar=avatar):
         if message.get("image_bytes"):
-            st.image(message["image_bytes"], caption="Photo attached", width=220)
+            st.image(message["image_bytes"], caption=ui_t("photo_attached"), width=220)
         if message.get("audio_bytes"):
             st.audio(message["audio_bytes"], format=message.get("audio_mime", "audio/webm"))
         if message.get("content"):
@@ -1903,9 +2157,10 @@ for idx, message in enumerate(st.session_state.messages):
                     message["content"],
                     f"history-{idx}",
                     language=message.get("language", "english"),
+                    ui_copy=ui_copy,
                 )
         if message.get("demo"):
-            st.caption("🎬 Prepared demonstration response")
+            st.caption(f"🎬 {ui_t('prepared_reply')}")
 
 
 # ============================================================
@@ -1913,23 +2168,24 @@ for idx, message in enumerate(st.session_state.messages):
 # ============================================================
 chat_signature = inspect.signature(st.chat_input)
 chat_accepts_audio = "accept_audio" in chat_signature.parameters
+chat_accepts_submit_mode = "submit_mode" in chat_signature.parameters
 submission = None
 legacy_audio = None
 
 if chat_accepts_audio:
     submission = st.chat_input(
-        "Tell me what happened…",
+        ui_t("chat_placeholder"),
         key="care_chat_input",
         accept_file=True,
         file_type=["jpg", "jpeg", "png", "webp"],
         accept_audio=True,
         audio_sample_rate=16000,
-        submit_mode="disable",
+        **({"submit_mode": "disable"} if chat_accepts_submit_mode else {}),
     )
 else:
-    legacy_audio = st.audio_input("🎙️ Voice message", sample_rate=16000, key="legacy_audio")
+    legacy_audio = st.audio_input(f"🎙️ {ui_t('voice_message')}", sample_rate=16000, key="legacy_audio")
     submission = st.chat_input(
-        "Tell me what happened…",
+        ui_t("chat_placeholder"),
         key="care_chat_input_legacy",
         accept_file=True,
         file_type=["jpg", "jpeg", "png", "webp"],
@@ -2005,7 +2261,7 @@ if submission is not None:
 
     transcribed_text = text.strip()
     if audio_bytes:
-        with st.status("🎙️ Transcribing your voice…", expanded=False) as status:
+        with st.status(f"🎙️ {ui_t('transcribing_voice')}", expanded=False) as status:
             try:
                 selected_for_audio = st.session_state.get("response_language", "auto")
                 audio_language_hint = LANGUAGE_OPTIONS.get(selected_for_audio, {}).get("whisper") if selected_for_audio != "auto" else None
@@ -2017,9 +2273,9 @@ if submission is not None:
                 )
                 transcribed_text = transcription["text"]
                 whisper_language = transcription.get("language", "")
-                status.update(label="🎙️ Voice understood", state="complete")
+                status.update(label=f"🎙️ {ui_t('voice_understood')}", state="complete")
             except Exception as exc:
-                status.update(label="Voice transcription failed", state="error")
+                status.update(label=ui_t("transcription_failed"), state="error")
                 st.error(str(exc))
 
     response_language, _speech_lang = selected_or_detected_language(transcribed_text, whisper_language)
@@ -2028,11 +2284,11 @@ if submission is not None:
     display_text = transcribed_text
     if not display_text:
         if image is not None:
-            display_text = "Take a look at this photo and help me understand what I should do next."
+            display_text = ui_t("default_image_prompt")
         elif audio_bytes:
             display_text = "🎙️ Voice message"
         else:
-            display_text = "Can you help me with this?"
+            display_text = ui_t("default_help_prompt")
 
     st.session_state.messages.append(
         {
@@ -2047,7 +2303,7 @@ if submission is not None:
 
     with st.chat_message("user", avatar="🧑"):
         if image_bytes:
-            st.image(image_bytes, caption="Photo attached", width=220)
+            st.image(image_bytes, caption=ui_t("photo_attached"), width=220)
         if audio_bytes:
             st.audio(audio_bytes, format=audio_mime or "audio/webm")
         if display_text:
@@ -2084,7 +2340,7 @@ if submission is not None:
 
         elif image_bytes:
             try:
-                with st.spinner("🔎 Taking a closer look…"):
+                with st.spinner(f"🔎 {ui_t('taking_closer_look')}"):
                     image_notes = groq_image_analysis(
                         image_bytes,
                         image_mime or "image/jpeg",
@@ -2092,7 +2348,7 @@ if submission is not None:
                     )
                 st.session_state.last_image_notes = image_notes
 
-                with st.spinner("💬 Putting that into plain English…"):
+                with st.spinner(f"💬 {ui_t('putting_into_plain_language')}"):
                     answer, model_used = groq_chat(
                         transcribed_text or "What should I know about this photo?",
                         env_text=env_text,
@@ -2100,16 +2356,12 @@ if submission is not None:
                         response_language=response_language,
                     )
             except Exception as exc:
-                answer = (
-                    "I couldn't analyze that photo right now. You can still ask me about what you're noticing in "
-                    "words, or try the photo again in a moment.\n\n"
-                    f"*Technical detail: {exc}*"
-                )
+                answer = f"{ui_t('image_error')}\n\n*{ui_t('technical_detail')}: {exc}*"
                 model_used = "IMAGE ERROR"
 
         else:
             try:
-                with st.spinner("💬 Thinking…"):
+                with st.spinner(f"💬 {ui_t('thinking')}"):
                     answer, model_used = groq_chat(
                         transcribed_text or display_text,
                         env_text=env_text,
@@ -2117,11 +2369,7 @@ if submission is not None:
                         response_language=response_language,
                     )
             except Exception as exc:
-                answer = (
-                    "I'm having trouble reaching the chat service right now. Try again in a moment, or switch on "
-                    "Demo Mode if you need the presentation to keep running.\n\n"
-                    f"*Technical detail: {exc}*"
-                )
+                answer = f"{ui_t('chat_error')}\n\n*{ui_t('technical_detail')}: {exc}*"
                 model_used = "CHAT ERROR"
 
         st.markdown(answer)
@@ -2130,9 +2378,10 @@ if submission is not None:
             f"new-{len(st.session_state.messages)}",
             language=response_language,
             auto=bool(audio_bytes) and st.session_state.auto_speak_voice,
+            ui_copy=ui_copy,
         )
         if model_used == "DEMO":
-            st.caption("🎬 Prepared demonstration response")
+            st.caption(f"🎬 {ui_t('prepared_reply')}")
 
     st.session_state.messages.append(
         {
@@ -2150,7 +2399,7 @@ if submission is not None:
 st.markdown(
     f"""
     <div class="fa-footer">
-      <span>💊 Drocto AI • General first-aid information — not a diagnosis</span>
+      <span>💊 Drocto AI • {safe_ui(ui_t("footer_disclaimer"))}</span>
       <span>{datetime.now():%d %b %Y}</span>
     </div>
     """,
